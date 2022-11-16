@@ -181,12 +181,9 @@ dmypy.json
 .idea/*
 venv/*
 
-revital/data*/*
-revital/build/*
-revital/dist/*
-revital/_input/*
-revital/_output/*
-revital/output/*
+data*/*
+build/*
+dist/*
 
 tests/crops/*
 tests/測試pyqt5/loc/*

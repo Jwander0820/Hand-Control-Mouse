@@ -31,8 +31,10 @@ class HandControlMouse:
         self.horiz_left_last_time = 0  # 計算水平左移的間隔時間
         self.horiz_right_last_time = 0  # 計算水平右移的間隔時間
         self.vert_up_last_time = 0  # 垂直上移的間隔時間
-        self.vert_down_last_time = 0  # 垂直下移的間隔間
-        
+        self.vert_down_last_time = 0  # 垂直下移的間隔時間
+        self.sleep_last_time = 0  # 休眠機制的間隔時間
+        self.sleep_switch = True  # 是否開啟
+
     def move_mouse(self, x, y):
         """
         移動鼠標的操作
@@ -168,7 +170,7 @@ class HandControlMouse:
         self.pTime = cTime  # 重置起始時間
         return fps
 
-    def process_video_frame(self):
+    def process_video_frame(self, sleep_mode=True):
         # 處理每一幀圖像
         while True:
             # 圖片是否成功接收、img幀圖像
@@ -179,8 +181,25 @@ class HandControlMouse:
             cv2.rectangle(img, self.pt1, self.pt2, (0, 255, 255), 5)
             # 手部關鍵點檢測，傳入每幀圖像, 返回手部關鍵點的座標信息(字典)，繪製關鍵點後的圖像
             hands, img = self.detector.findHands(img, flipType=False)  # 上面反轉過了，這裏就不用再翻轉了
-            # 如果能檢測到手那麼才進行下一步
-            if hands:
+
+            # 睡眠機制；有檢測到手部且睡眠模式開啟才會進行判斷
+            if hands and sleep_mode:
+                fingers = self.detector.fingersUp(hands[0])
+                # 數字六手勢，決定睡眠模式的開關，最小間隔時間3秒
+                if fingers[0] == 1 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
+                    sleep_start_time = time.time()
+                    if sleep_start_time - self.sleep_last_time > 3:
+                        self.sleep_last_time = time.time()  # 更新本次執行的結束時間
+                        if not self.sleep_switch:  # 若觸發時睡眠開關為False則切換為True，反之亦然
+                            self.sleep_switch = True
+                        else:
+                            self.sleep_switch = False
+            # 當睡眠模式開啟時，左上方顯示sleep
+            if not self.sleep_switch:
+                cv2.putText(img, "sleep", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+
+            # 有檢測到手部且睡眠開關為True時才會執行手勢判斷
+            if self.sleep_switch and hands:
                 # 獲取hands中的21個關鍵點訊息
                 lmList = hands[0]['lmList']  # hands是由N個字典組成的列表，字典包每隻手的關鍵點信息
                 x1, y1, _ = lmList[9]  # 掌心處的關鍵點索引號爲9
@@ -210,12 +229,12 @@ class HandControlMouse:
             # 在影片上顯示fps信息，先轉換成整數再變成字符串形式，文本顯示座標，文本字體，文本大小
             cv2.putText(img, str(int(fps)), (50, 50), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
             # 顯示圖像，輸入窗口名及圖像數據
-            cv2.imshow('HandControlMouse', img)
+            cv2.imshow('HandControlMouse Press Esc to exit the program', img)
             if cv2.waitKey(1) & 0xFF == 27:  # 每幀滯留20毫秒後消失，ESC鍵退出
                 break
 
         # 釋放資源
-        cap.release()
+        self.cap.release()
         cv2.destroyAllWindows()
 
 
