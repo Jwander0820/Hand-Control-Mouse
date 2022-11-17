@@ -5,6 +5,7 @@ import autopy  # 滑鼠控制
 import pyautogui  # 滑鼠控制
 from cvzone.HandTrackingModule import HandDetector  # 手部檢測方法
 from model.func_key import FuncKey
+from model.read_config import ReadConfig
 
 
 class HandControlMouse:
@@ -26,14 +27,21 @@ class HandControlMouse:
                                      maxHands=1,  # 最多檢測一隻手
                                      detectionCon=0.8,  # 最小檢測置信度
                                      minTrackCon=0.5)  # 最小跟蹤置信度
-        # 3. 計時器，用於計算間隔時間，避免快速重複執行同一操作
-        self.click_last_time = 0  # 紀錄上一次點擊的時間，用於計算點擊的間隔時間
+        # 3. 基本變數
+        self.click_last_time = 0  # 計時器；紀錄上一次點擊的時間，用於計算點擊的間隔時間
         self.horiz_left_last_time = 0  # 計算水平左移的間隔時間
         self.horiz_right_last_time = 0  # 計算水平右移的間隔時間
-        self.vert_up_last_time = 0  # 垂直上移的間隔時間
-        self.vert_down_last_time = 0  # 垂直下移的間隔時間
-        self.sleep_last_time = 0  # 休眠機制的間隔時間
-        self.sleep_switch = True  # 是否開啟
+        self.vert_up_last_time = 0  # 計算垂直上移的間隔時間
+        self.vert_down_last_time = 0  # 計算垂直下移的間隔時間
+        self.sleep_last_time = 0  # 計算休眠機制的間隔時間
+        self.sleep_switch = True  # 控制睡眠開關
+
+        # 4. 基本參數
+        basic_config = ReadConfig.get_config("./config.ini", "basic")
+        self.sleep_mode = basic_config.getboolean("sleep_mode")  # 是否開啟睡眠機制(模式)
+        self.anti_shake_factor = basic_config.getint("anti_shake_factor")  # 防抖動係數
+        self.frame_resize_factor = basic_config.getfloat("frame_resize_factor")  # 觀察用的視訊框大小
+        self.save_video_frame = basic_config.getboolean("save_video_frame")  # 是否要記錄每一幀的圖像，後期合成GIF或影片
 
     def move_mouse(self, x, y):
         """
@@ -46,6 +54,10 @@ class HandControlMouse:
         # 將掌心移動範圍從預設的窗口範圍，映射到電腦螢幕範圍；(x3, y3)是映射的真實座標
         x3 = np.interp(x, (self.pt1[0], self.pt2[0]), (0, self.wScr))
         y3 = np.interp(y, (self.pt1[1], self.pt2[1]), (0, self.hScr))
+        if abs(x3 - self.p_loc_x) < self.anti_shake_factor and abs(y3 - self.p_loc_y) < self.anti_shake_factor:
+            # 若是移動幅度小於防抖動係數(pixel)的話，取消移動，防抖動係數也會影響到移動軌跡，代表最小移動距離為該值
+            # 若係數設定太高也會造成滑鼠移動時的不連續感
+            return False
         # 平滑化，使手指在移動鼠標時，鼠標箭頭不會一直晃動；原理為新的座標-舊的座標，計算出移動量後除上平滑係數，降低移動的幅度
         c_loc_x = self.p_loc_x + (x3 - self.p_loc_x) / self.smooth  # 當前的鼠標所在位置座標
         c_loc_y = self.p_loc_y + (y3 - self.p_loc_y) / self.smooth
@@ -78,11 +90,11 @@ class HandControlMouse:
             pyautogui.click(clicks=2, button='left')
         self.click_last_time = time.time()  # 完成操作後，紀錄本次點擊的結束時間
 
-    def scroll_page(self, img, x, y, horizontal_control=True, intervals=5.0):
+    def scroll_page(self, frame, x, y, horizontal_control=True, intervals=5.0):
         """
         滾動操作；上下滾動分兩種段位，緩慢滾動與快速滾動，左右的操作則可以自定義，預設為向左複製，向右貼上+Enter
         # 當沒有上下的操作時才會出發左右的操作
-        :param img:準備處理的圖片
+        :param frame:準備處理的圖片
         :param x:移動點的 X座標
         :param y:移動點的 Y座標
         :param horizontal_control: 是否啟用水平控制操作
@@ -94,36 +106,36 @@ class HandControlMouse:
         y3 = np.interp(y, (self.pt1[1], self.pt2[1]), (0, self.hScr))
         if 350 > self.p_loc_y - y3 > 150:  # 映射座標的y小於當前鼠標座標(x3, y3) 代表新座標在鼠標座標上面
             pyautogui.scroll(50)
-            cv2.putText(img, "slow scroll up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+            cv2.putText(frame, "slow scroll up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
         elif self.p_loc_y - y3 > 350:  # 第二段滾動方式
             pyautogui.scroll(200)
-            cv2.putText(img, "quick scroll up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+            cv2.putText(frame, "quick scroll up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
         elif -350 < self.p_loc_y - y3 < -150:
             pyautogui.scroll(-50)
-            cv2.putText(img, "slow scroll down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+            cv2.putText(frame, "slow scroll down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
         elif self.p_loc_y - y3 < -350:
             pyautogui.scroll(-200)
-            cv2.putText(img, "quick scroll down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+            cv2.putText(frame, "quick scroll down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
         # 故意設計成當上下的控制都沒觸發時才會輪到左右的控制，避免短時間執行多項操作，導致錯誤操作
         elif self.p_loc_x - x3 > 250:
             if horizontal_control:  # 是否開啟水平控制操作
                 horiz_left_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_left_start_time - self.horiz_left_last_time > intervals:
                     FuncKey.ctrl_c()  # 執行快捷鍵
-                    cv2.putText(img, "ctrl + c", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "ctrl + c", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_left_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
         elif self.p_loc_x - x3 < -250:
             if horizontal_control:
                 horiz_right_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_right_start_time - self.horiz_right_last_time > intervals:
                     FuncKey.ctrl_v_enter()
-                    cv2.putText(img, "ctrl + v", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "ctrl + v", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_right_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
 
-    def custom_control_func(self, img, x, y, vertical_control=True, horizontal_control=True, intervals=5.0):
+    def custom_control_func(self, frame, x, y, vertical_control=True, horizontal_control=True, intervals=5.0):
         """
         自定義控制函數，提供四向控制
-        :param img:準備處理的圖片
+        :param frame:準備處理的圖片
         :param x:移動點的 X座標
         :param y:移動點的 Y座標
         :param vertical_control: 是否啟用垂直控制操作
@@ -140,50 +152,52 @@ class HandControlMouse:
                 vert_up_start_time = time.time()  # 紀錄開始點擊的時間
                 if vert_up_start_time - self.vert_up_last_time > intervals:
                     # FuncKey.alt_tab()  # <-可以改成自定義的函數
-                    cv2.putText(img, "vert up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "vert up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.vert_up_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
         elif self.p_loc_y - y3 < -250:  # 朝下
             if vertical_control:
                 vert_down_start_time = time.time()  # 紀錄開始點擊的時間
                 if vert_down_start_time - self.vert_down_last_time > intervals:
                     # FuncKey.ctrl_a()
-                    cv2.putText(img, "vert down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "vert down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.vert_down_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
         elif self.p_loc_x - x3 > 250:  # 朝左
             if horizontal_control:  # 是否開啟水平控制操作
                 horiz_left_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_left_start_time - self.horiz_left_last_time > intervals:
                     # FuncKey.ctrl_win_left()
-                    cv2.putText(img, "horiz left", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "horiz left", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_left_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
         elif self.p_loc_x - x3 < -250:  # 朝右
             if horizontal_control:
                 horiz_right_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_right_start_time - self.horiz_right_last_time > intervals:
                     # FuncKey.ctrl_win_right()
-                    cv2.putText(img, "horiz right", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "horiz right", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_right_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
 
     def cal_fps(self):
         cTime = time.time()  # 處理完一幀圖像的時間
+        process_time = round(cTime - self.pTime, 4)
         fps = 1 / (cTime - self.pTime)
         self.pTime = cTime  # 重置起始時間
-        return fps
+        return fps, process_time
 
-    def process_video_frame(self, sleep_mode=True):
+    def process_video_frame(self):
         # 處理每一幀圖像
+        frame_num = 0
         while True:
-            # 圖片是否成功接收、img幀圖像
-            success, img = self.cap.read()
+            # 圖片是否成功接收、frame幀圖像
+            success, frame = self.cap.read()
             # 翻轉圖像，使自身和攝像頭中的自己呈鏡像關係 # 1代表水平翻轉，0代表豎直翻轉
-            img = cv2.flip(img, flipCode=1)
+            frame = cv2.flip(frame, flipCode=1)
             # 在圖像窗口上創建一個矩形框，在該區域內移動鼠標
-            cv2.rectangle(img, self.pt1, self.pt2, (0, 255, 255), 5)
+            cv2.rectangle(frame, self.pt1, self.pt2, (0, 255, 255), 5)
             # 手部關鍵點檢測，傳入每幀圖像, 返回手部關鍵點的座標信息(字典)，繪製關鍵點後的圖像
-            hands, img = self.detector.findHands(img, flipType=False)  # 上面反轉過了，這裏就不用再翻轉了
+            hands, frame = self.detector.findHands(frame, flipType=False)  # 上面反轉過了，這裏就不用再翻轉了
 
             # 睡眠機制；有檢測到手部且睡眠模式開啟才會進行判斷
-            if hands and sleep_mode:
+            if hands and self.sleep_mode:
                 fingers = self.detector.fingersUp(hands[0])
                 # 數字六手勢，決定睡眠模式的開關，最小間隔時間3秒
                 if fingers[0] == 1 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
@@ -196,40 +210,45 @@ class HandControlMouse:
                             self.sleep_switch = False
             # 當睡眠模式開啟時，左上方顯示sleep
             if not self.sleep_switch:
-                cv2.putText(img, "sleep", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                cv2.putText(frame, "sleep", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
 
             # 有檢測到手部且睡眠開關為True時才會執行手勢判斷
-            if self.sleep_switch and hands:
+            if hands and self.sleep_switch:
                 # 獲取hands中的21個關鍵點訊息
                 lmList = hands[0]['lmList']  # hands是由N個字典組成的列表，字典包每隻手的關鍵點信息
                 x1, y1, _ = lmList[9]  # 掌心處的關鍵點索引號爲9
                 # 檢測哪個手指是朝上的
                 fingers = self.detector.fingersUp(hands[0])  # 傳入 # print(fingers) 返回 [0,1,1,0,0] 代表只有食指和中指豎起
-                cv2.putText(img, f"{fingers}", (50, 120), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)  # 顯示當前手指的狀態
-                cv2.circle(img, (x1, y1), 15, (255, 255, 0), cv2.FILLED)  # 開始移動時，在掌心畫一個圓圈，看得更清晰一些
+                cv2.putText(frame, f"{fingers}", (50, 120), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)  # 顯示當前手指的狀態
+                cv2.circle(frame, (x1, y1), 15, (255, 255, 0), cv2.FILLED)  # 開始移動時，在掌心畫一個圓圈，看得更清晰一些
                 """手勢操作區域"""
                 # 手掌攤開抓取掌心點作為虛擬滑鼠移動
                 if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:
                     self.move_mouse(x1, y1)
-                    cv2.putText(img, "move", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "move", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 握拳執行點擊操作；(握拳狀態下，僅有大拇指會立起)
                 if fingers[0] == 1 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
                     self.click_left_button()
-                    cv2.putText(img, "click", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    cv2.putText(frame, "click", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 槍型手勢上下滾動操作、水平向執行複製貼上操作(可修改)
                 if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
-                    self.scroll_page(img, x1, y1)
+                    self.scroll_page(frame, x1, y1)
                 # 數字四手勢，可自定義四向操作
                 if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:
-                    self.custom_control_func(img, x1, y1)
-                    cv2.putText(img, "customize your function", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+                    self.custom_control_func(frame, x1, y1)
+                    cv2.putText(frame, "customize your function", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
 
             # 計算影像處理的幀數
-            fps = self.cal_fps()
+            fps, process_time = self.cal_fps()
             # 在影片上顯示fps信息，先轉換成整數再變成字符串形式，文本顯示座標，文本字體，文本大小
-            cv2.putText(img, str(int(fps)), (50, 50), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+            cv2.putText(frame, str(int(fps)), (50, 50), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
             # 顯示圖像，輸入窗口名及圖像數據
-            cv2.imshow('HandControlMouse Press Esc to exit the program', img)
+            frame = cv2.resize(frame, dsize=None, fx=self.frame_resize_factor, fy=self.frame_resize_factor,
+                               interpolation=cv2.INTER_AREA)
+            if self.save_video_frame:
+                cv2.imwrite(f"./img/f{str(frame_num).zfill(5)}_s{process_time:0<6}.png", frame)
+            cv2.imshow('HandControlMouse Press Esc to exit the program', frame)
+            frame_num += 1
             if cv2.waitKey(1) & 0xFF == 27:  # 每幀滯留20毫秒後消失，ESC鍵退出
                 break
 
