@@ -231,7 +231,7 @@ class HandControlMouse:
                     self.click_left_button()
                     cv2.putText(frame, "click", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 槍型手勢上下滾動操作、水平向執行複製貼上操作(可修改)
-                if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
+                if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
                     self.scroll_page(frame, x1, y1)
                 # 數字四手勢，可自定義四向操作
                 if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:

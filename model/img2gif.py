@@ -11,6 +11,8 @@ gif_list = []
 for file_name in files:
     img_path = os.path.join(folder_path, file_name)
     frame_sec = float(file_name[8:14])  # 提取出秒數，轉換成浮點數
+    if frame_sec > 60:  # 儲存的第一張圖片時間是無法使用的因此透過計算秒速來篩選掉異常的幀(捨棄第0幀f00000)
+        continue
     frame_time = round(frame_sec / 0.04)  # 計算需要重複的幀數，以每秒25幀做計算，一幀會佔據0.04秒
     img = Image.open(img_path).convert("RGB")  # 開啟圖片
     for i in range(frame_time):  # 按照需要重複的幀數，添加N張圖到清單中
