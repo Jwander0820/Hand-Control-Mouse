@@ -66,3 +66,21 @@ class FuncKey:
         pyautogui.press('right')
         pyautogui.keyUp('ctrl')
         pyautogui.keyUp('win')
+
+    @staticmethod
+    def right_click():
+        """
+        shift + f10；鍵盤模擬滑鼠點擊右鍵的選單功能
+        :return:
+        """
+        pyautogui.keyDown('shift')
+        pyautogui.press('f10')
+        pyautogui.keyUp('shift')
+
+    @staticmethod
+    def enter():
+        """
+        enter；輸入使用
+        :return:
+        """
+        pyautogui.press('enter')

@@ -4,8 +4,8 @@ import numpy as np
 import autopy  # 滑鼠控制
 import pyautogui  # 滑鼠控制
 from cvzone.HandTrackingModule import HandDetector  # 手部檢測方法
-from model.func_key import FuncKey
-from model.read_config import ReadConfig
+from model.func_key import FuncKey  # 引入自定義功能鍵
+from model.read_config import ReadConfig  # 讀取設定檔
 
 
 class HandControlMouse:
@@ -42,6 +42,8 @@ class HandControlMouse:
         self.anti_shake_factor = basic_config.getint("anti_shake_factor")  # 防抖動係數
         self.frame_resize_factor = basic_config.getfloat("frame_resize_factor")  # 觀察用的視訊框大小
         self.save_video_frame = basic_config.getboolean("save_video_frame")  # 是否要記錄每一幀的圖像，後期合成GIF或影片
+        self.gesture_seven = basic_config.getboolean("gesture_seven")  # 控制手勢七的開關(槍型)
+        self.gesture_four = basic_config.getboolean("gesture_four")  # 控制手勢四的開關
 
     def move_mouse(self, x, y):
         """
@@ -165,14 +167,14 @@ class HandControlMouse:
             if horizontal_control:  # 是否開啟水平控制操作
                 horiz_left_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_left_start_time - self.horiz_left_last_time > intervals:
-                    # FuncKey.ctrl_win_left()
+                    FuncKey.enter()
                     cv2.putText(frame, "horiz left", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_left_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
         elif self.p_loc_x - x3 < -250:  # 朝右
             if horizontal_control:
                 horiz_right_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_right_start_time - self.horiz_right_last_time > intervals:
-                    # FuncKey.ctrl_win_right()
+                    FuncKey.right_click()
                     cv2.putText(frame, "horiz right", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_right_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
 
@@ -232,10 +234,12 @@ class HandControlMouse:
                     cv2.putText(frame, "click", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 槍型手勢上下滾動操作、水平向執行複製貼上操作(可修改)
                 if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
-                    self.scroll_page(frame, x1, y1)
+                    if self.gesture_seven:
+                        self.scroll_page(frame, x1, y1)
                 # 數字四手勢，可自定義四向操作
                 if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:
-                    self.custom_control_func(frame, x1, y1)
+                    if self.gesture_four:
+                        self.custom_control_func(frame, x1, y1)
                     cv2.putText(frame, "customize your function", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
 
             # 計算影像處理的幀數
