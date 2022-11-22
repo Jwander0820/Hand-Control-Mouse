@@ -44,6 +44,7 @@ class HandControlMouse:
         self.save_video_frame = basic_config.getboolean("save_video_frame")  # 是否要記錄每一幀的圖像，後期合成GIF或影片
         self.gesture_seven = basic_config.getboolean("gesture_seven")  # 控制手勢七的開關(槍型)
         self.gesture_four = basic_config.getboolean("gesture_four")  # 控制手勢四的開關
+        self.gesture_four_exe_threshold = basic_config.getint("gesture_four_exe_threshold")  # 控制手勢四的開關
 
     def move_mouse(self, x, y):
         """
@@ -149,32 +150,32 @@ class HandControlMouse:
         x3 = np.interp(x, (self.pt1[0], self.pt2[0]), (0, self.wScr))
         y3 = np.interp(y, (self.pt1[1], self.pt2[1]), (0, self.hScr))
 
-        if self.p_loc_y - y3 > 250:  # 朝上
+        if self.p_loc_y - y3 > self.gesture_four_exe_threshold:  # 朝上
             if vertical_control:  # 是否開啟水平控制操作
                 vert_up_start_time = time.time()  # 紀錄開始點擊的時間
                 if vert_up_start_time - self.vert_up_last_time > intervals:
-                    # FuncKey.alt_tab()  # <-可以改成自定義的函數
+                    FuncKey.right_click()  # <-可以改成自定義的函數
                     cv2.putText(frame, "vert up", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.vert_up_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
-        elif self.p_loc_y - y3 < -250:  # 朝下
+        elif self.p_loc_y - y3 < -self.gesture_four_exe_threshold:  # 朝下
             if vertical_control:
                 vert_down_start_time = time.time()  # 紀錄開始點擊的時間
                 if vert_down_start_time - self.vert_down_last_time > intervals:
-                    # FuncKey.ctrl_a()
+                    FuncKey.enter()
                     cv2.putText(frame, "vert down", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.vert_down_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
-        elif self.p_loc_x - x3 > 250:  # 朝左
+        elif self.p_loc_x - x3 > self.gesture_four_exe_threshold:  # 朝左
             if horizontal_control:  # 是否開啟水平控制操作
                 horiz_left_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_left_start_time - self.horiz_left_last_time > intervals:
-                    FuncKey.enter()
+                    FuncKey.left()
                     cv2.putText(frame, "horiz left", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_left_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
-        elif self.p_loc_x - x3 < -250:  # 朝右
+        elif self.p_loc_x - x3 < -self.gesture_four_exe_threshold:  # 朝右
             if horizontal_control:
                 horiz_right_start_time = time.time()  # 紀錄開始點擊的時間
                 if horiz_right_start_time - self.horiz_right_last_time > intervals:
-                    FuncKey.right_click()
+                    FuncKey.right()
                     cv2.putText(frame, "horiz right", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                     self.horiz_right_last_time = time.time()  # 完成操作後，紀錄本次執行的結束時間
 
