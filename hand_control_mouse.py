@@ -251,6 +251,8 @@ class HandControlMouse:
             frame = cv2.resize(frame, dsize=None, fx=self.frame_resize_factor, fy=self.frame_resize_factor,
                                interpolation=cv2.INTER_AREA)
             if self.save_video_frame:
+                if not os.path.isdir("./img"):
+                    os.mkdir("./img")
                 cv2.imwrite(f"./img/f{str(frame_num).zfill(5)}_s{process_time:0<6}.png", frame)
             cv2.imshow('HandControlMouse Press Esc to exit the program', frame)
             frame_num += 1
