@@ -117,3 +117,31 @@ class FuncKey:
         """
         pyautogui.press('down')
 
+    @staticmethod
+    def win_h():
+        """
+        win + h : 呼叫windows快捷鍵，windows語音輸入功能
+        :return:
+        """
+        pyautogui.keyDown('win')
+        pyautogui.press('h')
+        pyautogui.keyUp('win')
+    @staticmethod
+    def win_q():
+        """
+        win + q : 呼叫windows快捷鍵，開啟系統搜尋功能
+        :return:
+        """
+        pyautogui.keyDown('win')
+        pyautogui.press('q')
+        pyautogui.keyUp('win')
+
+    @staticmethod
+    def win_e():
+        """
+        win + e : 呼叫windows快捷鍵，開啟檔案總管
+        :return:
+        """
+        pyautogui.keyDown('win')
+        pyautogui.press('e')
+        pyautogui.keyUp('win')

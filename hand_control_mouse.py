@@ -1,3 +1,4 @@
+import os
 import time
 import cv2
 import numpy as np
@@ -35,6 +36,9 @@ class HandControlMouse:
         self.vert_down_last_time = 0  # 計算垂直下移的間隔時間
         self.sleep_last_time = 0  # 計算休眠機制的間隔時間
         self.sleep_switch = True  # 控制睡眠開關
+        self.hand_status = ["", 0]  # 手勢狀態，[0]為狀態、[1]手勢持續時間
+        self.hand_status_start_time = 0  # 手勢狀態起始時間
+        self.hand_status_end_time = 0  # 用於計算手勢狀態維持的時間
 
         # 4. 基本參數
         basic_config = ReadConfig.get_config("./config.ini", "basic")
@@ -45,6 +49,7 @@ class HandControlMouse:
         self.gesture_seven = basic_config.getboolean("gesture_seven")  # 控制手勢七的開關(槍型)
         self.gesture_four = basic_config.getboolean("gesture_four")  # 控制手勢四的開關
         self.gesture_four_exe_threshold = basic_config.getint("gesture_four_exe_threshold")  # 控制手勢四的開關
+        self.func_trigger_time = basic_config.getfloat("func_trigger_time")
 
     def move_mouse(self, x, y):
         """
@@ -186,6 +191,20 @@ class HandControlMouse:
         self.pTime = cTime  # 重置起始時間
         return fps, process_time
 
+    def detect_hand_status(self, detect_target):
+        """
+        若手勢非指定的手勢(detect_target)，則將其狀態改變為指定的手勢
+        主要使用於計算手勢前置觸發時間，當固定一個手勢 n 秒時才會觸發功能，避免誤觸發
+        :param detect_target: 指定的手勢；5、0、7、6、4
+        :return:
+        """
+        if self.hand_status[0] != detect_target:
+            self.hand_status = [detect_target, 0]
+            self.hand_status_start_time = time.time()
+        else:
+            self.hand_status_end_time = time.time() - self.hand_status_start_time
+            self.hand_status[1] = self.hand_status_end_time
+
     def process_video_frame(self):
         # 處理每一幀圖像
         frame_num = 0
@@ -204,13 +223,16 @@ class HandControlMouse:
                 fingers = self.detector.fingersUp(hands[0])
                 # 數字六手勢，決定睡眠模式的開關，最小間隔時間3秒
                 if fingers[0] == 1 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
+                    self.detect_hand_status("6")
                     sleep_start_time = time.time()
-                    if sleep_start_time - self.sleep_last_time > 3:
+                    if sleep_start_time - self.sleep_last_time > 3 and self.hand_status[1] > self.func_trigger_time:
                         self.sleep_last_time = time.time()  # 更新本次執行的結束時間
                         if not self.sleep_switch:  # 若觸發時睡眠開關為False則切換為True，反之亦然
                             self.sleep_switch = True
+                            self.detect_hand_status("6.5")  # 觸發睡眠開關時將狀態6重置
                         else:
                             self.sleep_switch = False
+                            self.detect_hand_status("6.5")
             # 當睡眠模式開啟時，左上方顯示sleep
             if not self.sleep_switch:
                 cv2.putText(frame, "sleep", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
@@ -227,22 +249,29 @@ class HandControlMouse:
                 """手勢操作區域"""
                 # 手掌攤開抓取掌心點作為虛擬滑鼠移動
                 if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:
+                    self.detect_hand_status("5")  # 用於手勢切換時重置(reset)時間
                     self.move_mouse(x1, y1)
                     cv2.putText(frame, "move", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 握拳執行點擊操作；(握拳狀態下，僅有大拇指會立起)
                 if fingers[0] == 1 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
+                    self.detect_hand_status("0")  # 用於手勢切換時重置(reset)時間
                     self.click_left_button()
                     cv2.putText(frame, "click", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
                 # 槍型手勢上下滾動操作、水平向執行複製貼上操作(可修改)
                 if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
-                    if self.gesture_seven:
+                    self.detect_hand_status("7")  # 檢測手勢狀態，並檢測其維持時間
+                    # 若手勢七功能開啟 且 手勢狀態維持為七超過 func_trigger_time 秒，才會觸發功能(預設為1秒)
+                    if self.gesture_seven and self.hand_status[1] > self.func_trigger_time:
                         self.scroll_page(frame, x1, y1)
                 # 數字四手勢，可自定義四向操作
                 if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1:
-                    if self.gesture_four:
+                    self.detect_hand_status("4")  # 檢測手勢狀態，並檢測其維持時間
+                    if self.gesture_four and self.hand_status[1] > self.func_trigger_time:
                         self.custom_control_func(frame, x1, y1)
                     cv2.putText(frame, "customize your function", (50, 80), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
-
+            # 若是沒有捕捉到手的狀態，則重置手勢維持時間；若手勢為6時則不觸發F重置
+            elif self.hand_status[0] != "6":
+                self.detect_hand_status("F")
             # 計算影像處理的幀數
             fps, process_time = self.cal_fps()
             # 在影片上顯示fps信息，先轉換成整數再變成字符串形式，文本顯示座標，文本字體，文本大小
